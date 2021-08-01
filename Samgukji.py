@@ -7,6 +7,8 @@ import cv2
 import os
 from torchvision.io import read_image
 from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
+import torch
 
 # %%
 base_path = './raw/한국어 글자체 이미지/02.인쇄체/'
@@ -37,14 +39,25 @@ def show_char(filen):
         img = cv2.imread(base_path+'word/'+filen)
     plt.imshow(img)
 
-# %% 마지막 글자는 10638번째 꿩
+# test
 show_char(seoul.iloc[0, 8])
 
 # %% (파일명, 라벨) tuple 리스트 생성
 labels = list(zip(seoul.file_name, seoul.text))
+img_labels = pd.DataFrame(labels)
 
+# %% file check: id 기준 10637까지
+for i in range(len(seoul)):
+    try:
+        show_char(seoul.iloc[i, 8])
+    except:
+        print("error id: ", i)
+        break
 
-# %%
+# %% 데이터가 있는 만큼만
+seoul = seoul[:10638]
+
+# %% Custom torch Dataset
 class HangulImageDataset(Dataset):
     def __init__(self, img_labels, img_dir, transform=None, target_transform=None):
         self.img_labels = img_labels
@@ -57,12 +70,42 @@ class HangulImageDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
-        image = read_image(img_path)
-        label = self.img_labels.iloc[idx, 1]
-        if self.transform:
-            image = self.transform(image)
-        if self.target_transform:
-            label = self.target_transform(label)
-        return image, label
+        try:
+            image = cv2.imread(img_path)
+            # image = read_image(img_path)
+            # print(type(image))
+            # print(image)
+            image = torch.from_numpy(image)
+            label = self.img_labels.iloc[idx, 1]
+            if self.transform:
+                image = self.transform(image)
+            if self.target_transform:
+                label = self.target_transform(label)
+            return image, label
+        except:
+            print("Unexpected error:", sys.exc_info()[0])
+            print("error: ", img_path)
+
+# %%
+# './raw/한국어 글자체 이미지/02.인쇄체/syllable/'
+Hdata = HangulImageDataset(img_labels, './raw/한국어 글자체 이미지/02.인쇄체/syllable/')
+train_dataloader = DataLoader(Hdata, batch_size=64, shuffle=True)
+# test_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
 
 
+# %%
+# 이미지와 정답(label)을 표시합니다.
+from torchvision.io import read_image
+# from torch.ops.image import read_file
+train_features, train_labels = next(iter(train_dataloader))
+print(f"Feature batch shape: {train_features.size()}")
+print(f"Labels batch shape: {train_labels.size()}")
+img = train_features[0].squeeze()
+label = train_labels[0]
+plt.imshow(img, cmap="gray")
+plt.show()
+print(f"Label: {label}")
+# %%
+
+
+# %%
