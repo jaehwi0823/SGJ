@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
 import torch
 import PIL
+import torchvision.transforms as T
 
 # %%
 base_path = './raw/한국어 글자체 이미지/02.인쇄체/'
@@ -76,10 +77,10 @@ class HangulImageDataset(Dataset):
     def __getitem__(self, idx):
         # print("====== idx: ", idx, " =====")
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
-        # image = PIL.Image.open(img_path)
-        # image = self.tt(image)
-        image = cv2.imread(img_path)
-        image = torch.from_numpy(image)
+        image = PIL.Image.open(img_path)
+        image = self.tt(image)
+        # image = cv2.imread(img_path)
+        # image = torch.from_numpy(image)
         label = self.img_labels.iloc[idx, 1]
         if self.transform:
             image = self.transform(image)
@@ -92,21 +93,22 @@ class HangulImageDataset(Dataset):
 
 # %%
 # './raw/한국어 글자체 이미지/02.인쇄체/syllable/'
-Hdata = HangulImageDataset(img_labels, './raw/한국어 글자체 이미지/02.인쇄체/syllable/')
-train_dataloader = DataLoader(Hdata, batch_size=2, shuffle=False)
-
+rs = T.Resize((100, 100))
+Hdata = HangulImageDataset(img_labels, './raw/한국어 글자체 이미지/02.인쇄체/syllable/', rs)
+train_dataloader = DataLoader(Hdata, batch_size=64, shuffle=False)
 train_features, train_labels = next(iter(train_dataloader))
 # %%
 # 이미지와 정답(label)을 표시합니다.
-from torchvision.io import read_image
-# from torch.ops.image import read_file
-train_features, train_labels = next(iter(train_dataloader))
-print(train_features)
-print(train_labels)
+# train_features, train_labels = next(iter(train_dataloader))
+# print(train_features)
+# print(train_labels)
 print(f"Feature batch shape: {train_features.size()}")
 # print(f"Labels batch shape: {train_labels.size()}")
 img = train_features[0].squeeze()
 label = train_labels[0]
+
+# img.show()
+img = img.permute(1,2,0)
 plt.imshow(img, cmap="gray")
 plt.show()
 print(f"Label: {label}")
