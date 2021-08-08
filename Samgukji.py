@@ -1,5 +1,6 @@
 # %%
 import numpy as np
+from numpy import random
 import pandas as pd
 import json
 import matplotlib.pyplot as plt
@@ -86,16 +87,40 @@ class HangulImageDataset(Dataset):
         return image, label
 
 
-# %% 
+class RandomColorShift(object):
+    """Rescale the image in a sample to a given size.
+
+    Args:
+        output_size (tuple or int): Desired output size. If tuple, output is
+            matched to output_size. If int, smaller of image edges is matched
+            to output_size keeping aspect ratio the same.
+    """
+
+    def __init__(self):
+        pass
+
+    def __call__(self, sample):
+        # print(sample.shape)
+        # img, landmarks = sample['image'], sample['landmarks']
+
+        r = torch.rand((3,))
+        sample[0] = sample[0] + r[0]/2
+        sample[1] = sample[1] + r[1]/2
+        sample[2] = sample[2] + r[2]/2
+
+        return sample
+
+
 # %%
 torchvision_transform = transforms.Compose([
-    transforms.Resize((50, 50)), 
+    transforms.Resize((50, 50)),
+    RandomColorShift(),
     transforms.ColorJitter(
-        brightness=0.5, 
+        brightness=0.5,
         contrast=0.5, 
         saturation=0.5, 
-        hue=(-0.5, 0.5)
-    )
+        hue=0.5
+    ),
 ])
 
 Hdata = HangulImageDataset(img_labels, './raw/한국어 글자체 이미지/02.인쇄체/syllable/', 
@@ -106,12 +131,11 @@ print(f"Feature batch shape: {train_features.size()}")
 # print(f"Labels batch shape: {train_labels.size()}")
 
 # dataloader sample test
-img = train_features[0].squeeze()
+sample = train_features[0].squeeze()
 label = train_labels[0]
-tmp = img.numpy()
-np.savetxt('./sample.txt', tmp[0], delimiter=',')
-img = img.permute(1,2,0)
-plt.imshow(img, cmap="gray")
+
+sample = sample.permute(1,2,0)
+plt.imshow(sample, cmap="gray")
 plt.show()
 print(f"Label: {label}")
 
