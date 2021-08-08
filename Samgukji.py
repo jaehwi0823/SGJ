@@ -9,6 +9,7 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
 import PIL
+from torchvision import transforms
 import torchvision.transforms as T
 import torch
 
@@ -29,7 +30,7 @@ seoul = df_all_info[(df_all_info.font == '서울한강') & (df_all_info.type == 
 
 # %%
 def show_char(filen):
-    print("file: ", filen)
+    # print("file: ", filen)
     try:
         # print("syllable!")
         img = cv2.imread(base_path+'syllable/'+filen)
@@ -56,6 +57,7 @@ seoul = seoul[:10638]
 labels = list(zip(seoul.file_name, seoul.text))
 img_labels = pd.DataFrame(labels)
 img_labels.set_axis(labels=['filename','character'], axis=1, inplace=True)
+# 이미지가 한 글자에 하나씩밖에 없음.. augmentation 필요
 any(img_labels.groupby('character').filename.nunique() > 1)
 
 # %% Custom torch Dataset
@@ -80,22 +82,34 @@ class HangulImageDataset(Dataset):
         if self.target_transform:
             label = self.target_transform(label)
         
-        print(image.shape)
+        # print(image.shape)
         return image, label
-        
 
+
+# %% 
 # %%
-# './raw/한국어 글자체 이미지/02.인쇄체/syllable/'
-rs = T.Resize((100, 100))
-Hdata = HangulImageDataset(img_labels, './raw/한국어 글자체 이미지/02.인쇄체/syllable/', rs)
+torchvision_transform = transforms.Compose([
+    transforms.Resize((50, 50)), 
+    transforms.ColorJitter(
+        brightness=0.5, 
+        contrast=0.5, 
+        saturation=0.5, 
+        hue=(-0.5, 0.5)
+    )
+])
+
+Hdata = HangulImageDataset(img_labels, './raw/한국어 글자체 이미지/02.인쇄체/syllable/', 
+                           transform=torchvision_transform)
 train_dataloader = DataLoader(Hdata, batch_size=64, shuffle=False)
 train_features, train_labels = next(iter(train_dataloader))
 print(f"Feature batch shape: {train_features.size()}")
 # print(f"Labels batch shape: {train_labels.size()}")
 
-# %% dataloader sample test
+# dataloader sample test
 img = train_features[0].squeeze()
 label = train_labels[0]
+tmp = img.numpy()
+np.savetxt('./sample.txt', tmp[0], delimiter=',')
 img = img.permute(1,2,0)
 plt.imshow(img, cmap="gray")
 plt.show()
@@ -104,19 +118,6 @@ print(f"Label: {label}")
 
 
 
-# %%
-# torchvision_transform = transforms.Compose([
-#     transforms.Resize((256, 256)), 
-#     transforms.RandomCrop(224),
-#     transforms.RandomHorizontalFlip(),
-#     transforms.ToTensor(),
-# ])
-
-# torchvision_dataset = TorchvisionDataset(
-#     file_paths=["/content/gdrive/My Drive/test.png"],
-#     labels=[1],
-#     transform=torchvision_transform,
-# )
 
 
 # %%
