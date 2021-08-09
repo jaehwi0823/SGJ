@@ -1,18 +1,21 @@
 # %%
 import numpy as np
-from numpy import random
 import pandas as pd
 import json
 import matplotlib.pyplot as plt
 import cv2
 import os
+import PIL
+import time
+import copy
+import torch
+from torch import nn
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
-from torchvision.transforms import transforms
-import PIL
-from torchvision import transforms
-import torchvision.transforms as T
-import torch
+from torchvision import transforms, models
+import torch.optim as optim
+from torch.optim import lr_scheduler
+
 
 # %%
 base_path = './raw/한국어 글자체 이미지/02.인쇄체/'
@@ -88,14 +91,6 @@ class HangulImageDataset(Dataset):
 
 
 class RandomColorShift(object):
-    """Rescale the image in a sample to a given size.
-
-    Args:
-        output_size (tuple or int): Desired output size. If tuple, output is
-            matched to output_size. If int, smaller of image edges is matched
-            to output_size keeping aspect ratio the same.
-    """
-
     def __init__(self):
         pass
 
@@ -113,7 +108,7 @@ class RandomColorShift(object):
 
 # %%
 torchvision_transform = transforms.Compose([
-    transforms.Resize((50, 50)),
+    transforms.Resize((128, 128)),
     RandomColorShift(),
     transforms.ColorJitter(
         brightness=0.5,
@@ -121,6 +116,7 @@ torchvision_transform = transforms.Compose([
         saturation=0.5, 
         hue=0.5
     ),
+    # transforms.ToTensor(),
 ])
 
 Hdata = HangulImageDataset(img_labels, './raw/한국어 글자체 이미지/02.인쇄체/syllable/', 
@@ -131,42 +127,110 @@ print(f"Feature batch shape: {train_features.size()}")
 # print(f"Labels batch shape: {train_labels.size()}")
 
 # dataloader sample test
-sample = train_features[0].squeeze()
-label = train_labels[0]
+# sample = train_features[0].squeeze()
+# label = train_labels[0]
 
-sample = sample.permute(1,2,0)
-plt.imshow(sample, cmap="gray")
-plt.show()
-print(f"Label: {label}")
-
-
+# sample = sample.permute(1,2,0)
+# plt.imshow(sample, cmap="gray")
+# plt.show()
+# print(f"Label: {label}")
 
 
-
-
-# %%
-from torch import nn
-
-class NeuralNetwork(nn.Module):
-    def __init__(self):
-        super(NeuralNetwork, self).__init__()
-        self.flatten = nn.Flatten()
-        self.linear_relu_stack = nn.Sequential(
-            nn.Linear(100*100, 1024),
-            nn.ReLU(),
-            nn.Linear(1024, 256),
-            nn.ReLU(),
-            nn.Linear(256, 10),
-            nn.ReLU()
-        )
-
-    def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu_stack(x)
-        return logits
-
-model = NeuralNetwork().to('cpu')
-print(model)
+# %% pre-trained model
+resnet18_pretrained = models.resnet18(pretrained=True)
+num_classes = 10638
+num_ftrs = resnet18_pretrained.fc.in_features
+resnet18_pretrained.fc = nn.Sequential(
+                            nn.Linear(num_ftrs, 4096),
+                            nn.ReLU(),
+                            nn.Linear(4096, 10638),
+                         )
+device = torch.device('cpu')
+resnet18_pretrained.to(device)
 
 
 # %%
+from torchsummary import summary
+summary(resnet18_pretrained, input_size=(3, 128, 128), device=device.type)
+# %%
+
+
+# Loss Function
+criterion = nn.CrossEntropyLoss()
+# 모든 매개변수들이 최적화되었는지 관찰
+optimizer_ft = optim.SGD(resnet18_pretrained.parameters(), lr=0.001, momentum=0.9)
+# 7 에폭마다 0.1씩 학습률 감소
+exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+
+# %%
+def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
+    since = time.time()
+
+    best_model_wts = copy.deepcopy(model.state_dict())
+    best_acc = 0.0
+
+    for epoch in range(num_epochs):
+        print('Epoch {}/{}'.format(epoch, num_epochs - 1))
+        print('-' * 10)
+
+        # 각 에폭(epoch)은 학습 단계와 검증 단계를 갖습니다.
+        for phase in ['train', 'val']:
+            if phase == 'train':
+                model.train()  # 모델을 학습 모드로 설정
+            else:
+                model.eval()   # 모델을 평가 모드로 설정
+
+            running_loss = 0.0
+            running_corrects = 0
+
+            # 데이터를 반복
+            for inputs, labels in train_dataloader[phase]:
+                inputs = inputs.to(device)
+                labels = labels.to(device)
+
+                # 매개변수 경사도를 0으로 설정
+                optimizer.zero_grad()
+
+                # 순전파
+                # 학습 시에만 연산 기록을 추적
+                with torch.set_grad_enabled(phase == 'train'):
+                    outputs = model(inputs)
+                    _, preds = torch.max(outputs, 1)
+                    loss = criterion(outputs, labels)
+
+                    # 학습 단계인 경우 역전파 + 최적화
+                    if phase == 'train':
+                        loss.backward()
+                        optimizer.step()
+
+                # 통계
+                running_loss += loss.item() * inputs.size(0)
+                running_corrects += torch.sum(preds == labels.data)
+            if phase == 'train':
+                scheduler.step()
+
+            epoch_loss = running_loss / dataset_sizes[phase]
+            epoch_acc = running_corrects.double() / dataset_sizes[phase]
+
+            print('{} Loss: {:.4f} Acc: {:.4f}'.format(
+                phase, epoch_loss, epoch_acc))
+
+            # 모델을 깊은 복사(deep copy)함
+            if phase == 'val' and epoch_acc > best_acc:
+                best_acc = epoch_acc
+                best_model_wts = copy.deepcopy(model.state_dict())
+
+        print()
+
+    time_elapsed = time.time() - since
+    print('Training complete in {:.0f}m {:.0f}s'.format(
+        time_elapsed // 60, time_elapsed % 60))
+    print('Best val Acc: {:4f}'.format(best_acc))
+
+    # 가장 나은 모델 가중치를 불러옴
+    model.load_state_dict(best_model_wts)
+    return model
+
+# %%
+model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
+                       num_epochs=25)
