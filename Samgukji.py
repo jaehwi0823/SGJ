@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms, models
 import torch.optim as optim
 from torch.optim import lr_scheduler
+from konlpy.tag import Mecab
 
 
 # %%
@@ -58,11 +59,25 @@ for i in range(len(seoul)):
 
 # %% 데이터가 있는 만큼만
 seoul = seoul[:10638]
-labels = list(zip(seoul.file_name, seoul.text))
+
+
+# %% 숫자로 encoding
+encoding_dict = {}
+for idx, c in enumerate(seoul.text):
+    encoding_dict[c] = idx
+# encoding
+# seoul.text.map(encoding_dict)
+# convert-back
+# seoul.code.map({v:i for i,v in encoding_dict.items()})
+
+seoul['code'] = seoul.text.map(encoding_dict)
+
+# %%
+labels = list(zip(seoul.file_name, seoul.code))
 img_labels = pd.DataFrame(labels)
 img_labels.set_axis(labels=['filename','character'], axis=1, inplace=True)
-# 이미지가 한 글자에 하나씩밖에 없음.. augmentation 필요
-any(img_labels.groupby('character').filename.nunique() > 1)
+# 이미지가 한 글자에 하나씩밖에 없음.. 후... augmentation 필요
+# any(img_labels.groupby('character').filename.nunique() > 1)
 
 # %% Custom torch Dataset
 class HangulImageDataset(Dataset):
@@ -224,76 +239,4 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 # %%
 model_ft = train_model(resnet18_pretrained, criterion, optimizer_ft, 
                        exp_lr_scheduler, num_epochs=25)
-
-ip, lb = next(iter(train_dataloader))
-type(lb)
-
-# %%
-def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
-    since = time.time()
-
-    best_model_wts = copy.deepcopy(model.state_dict())
-    best_acc = 0.0
-
-    for epoch in range(num_epochs):
-        print('Epoch {}/{}'.format(epoch, num_epochs - 1))
-        print('-' * 10)
-
-        # 각 에폭(epoch)은 학습 단계와 검증 단계를 갖습니다.
-        for phase in ['train', 'val']:
-            if phase == 'train':
-                model.train()  # 모델을 학습 모드로 설정
-            else:
-                model.eval()   # 모델을 평가 모드로 설정
-
-            running_loss = 0.0
-            running_corrects = 0
-
-            # 데이터를 반복
-            for inputs, labels in train_dataloader[phase]:
-                inputs = inputs.to(device)
-                labels = labels.to(device)
-
-                # 매개변수 경사도를 0으로 설정
-                optimizer.zero_grad()
-
-                # 순전파
-                # 학습 시에만 연산 기록을 추적
-                with torch.set_grad_enabled(phase == 'train'):
-                    outputs = model(inputs)
-                    _, preds = torch.max(outputs, 1)
-                    loss = criterion(outputs, labels)
-
-                    # 학습 단계인 경우 역전파 + 최적화
-                    if phase == 'train':
-                        loss.backward()
-                        optimizer.step()
-
-                # 통계
-                running_loss += loss.item() * inputs.size(0)
-                running_corrects += torch.sum(preds == labels.data)
-            if phase == 'train':
-                scheduler.step()
-
-            epoch_loss = running_loss / dataset_sizes[phase]
-            epoch_acc = running_corrects.double() / dataset_sizes[phase]
-
-            print('{} Loss: {:.4f} Acc: {:.4f}'.format(
-                phase, epoch_loss, epoch_acc))
-
-            # 모델을 깊은 복사(deep copy)함
-            if phase == 'val' and epoch_acc > best_acc:
-                best_acc = epoch_acc
-                best_model_wts = copy.deepcopy(model.state_dict())
-
-        print()
-
-    time_elapsed = time.time() - since
-    print('Training complete in {:.0f}m {:.0f}s'.format(
-        time_elapsed // 60, time_elapsed % 60))
-    print('Best val Acc: {:4f}'.format(best_acc))
-
-    # 가장 나은 모델 가중치를 불러옴
-    model.load_state_dict(best_model_wts)
-    return model
 
