@@ -221,6 +221,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
         if epoch_acc > best_acc:
             best_acc = epoch_acc
             best_model_wts = copy.deepcopy(model.state_dict())
+            torch.save(model, f'./model_0812_{epoch}.pt')
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
@@ -237,4 +238,3 @@ model_ft = train_model(resnet18_pretrained, criterion, optimizer_ft,
 
 torch.save(model_ft, './model_0812.pt')
 
-# %%
