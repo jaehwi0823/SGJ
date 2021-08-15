@@ -232,9 +232,14 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     model.load_state_dict(best_model_wts)
     return model
 
+
 # model fitting
-model_ft = train_model(resnet18_pretrained, criterion, optimizer_ft, 
+# model_ft = train_model(resnet18_pretrained, criterion, optimizer_ft, 
+#                        exp_lr_scheduler, num_epochs=25)
+
+# load pretrained model
+premodel = torch.load('./model_0814_0.pt')
+model_ft = train_model(premodel, criterion, optimizer_ft, 
                        exp_lr_scheduler, num_epochs=25)
 
 torch.save(model_ft, './model_0814.pt')
-
