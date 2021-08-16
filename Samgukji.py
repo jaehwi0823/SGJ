@@ -9,8 +9,7 @@ import time
 import copy
 import torch
 from torch import nn
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, models
 import torch.optim as optim
 from torch.optim import lr_scheduler
@@ -170,10 +169,10 @@ criterion = nn.CrossEntropyLoss()
 # 모든 매개변수들이 최적화되었는지 관찰
 optimizer_ft = optim.SGD(resnet18_pretrained.parameters(), lr=0.001, momentum=0.9)
 # 7 에폭마다 0.1씩 학습률 감소
-exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=3, gamma=0.0002)
 
-# %%
-def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
+# training func
+def train_model(model, criterion, optimizer, scheduler, num_epochs=12):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -221,7 +220,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
         if epoch_acc > best_acc:
             best_acc = epoch_acc
             best_model_wts = copy.deepcopy(model.state_dict())
-            torch.save(model, f'./model_0814_{epoch}.pt')
+            torch.save(model, f'./model_0816_{epoch}.pt')
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
@@ -233,13 +232,15 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     return model
 
 
-# model fitting
+# model fitting for the first time
 # model_ft = train_model(resnet18_pretrained, criterion, optimizer_ft, 
 #                        exp_lr_scheduler, num_epochs=25)
 
 # load pretrained model
-premodel = torch.load('./model_0814_0.pt')
+premodel = torch.load('./model_0814_4.pt')
+premodel.to(device)
+
+# fitting
 model_ft = train_model(premodel, criterion, optimizer_ft, 
                        exp_lr_scheduler, num_epochs=25)
-
-torch.save(model_ft, './model_0814.pt')
+torch.save(model_ft, './model_0816.pt')
