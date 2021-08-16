@@ -13,11 +13,11 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, models
 import torch.optim as optim
 from torch.optim import lr_scheduler
-from torchsummary import summary
 
 
 base_path = './raw/한국어 글자체 이미지/02.인쇄체/'
-file = json.load(open(base_path + 'printed_data_info.json'))
+file = json.load(open(base_path + 'printed_data_info.json'
+                     , encoding='UTF8'))
 df_images = pd.DataFrame(file['images'])
 annotations = [{'image_id':img['image_id'], 
                 'text':img['text'], 
@@ -36,21 +36,25 @@ cond = list(map(lambda x: x in selection, seoul.text))
 seoul = seoul.loc[cond]
 print(len(seoul)) # 117500
 
+# 윈도우 한글 경로 처리
+def imread(mypath):
+    ff = np.fromfile(mypath, np.uint8)
+    return cv2.imdecode(ff, cv2.IMREAD_UNCHANGED)
+
 # drawing func
 def show_char(filen):
-    try:
-        img = cv2.imread(base_path+'syllable/'+filen)
-    except:
-        img = cv2.imread(base_path+'word/'+filen)
+    img = imread(os.path.join(base_path, 'syllable/', filen))
     plt.imshow(img)
+    plt.show()
+
 # test
-# show_char('00558413.png')
+# show_char('00000000.png')
 
 # file check:
 error_ids = []
 for name in seoul.file_name:
     try:
-        img = cv2.imread(base_path+'syllable/' + name)
+        img = imread(os.path.join(base_path, 'syllable/', name))
         if not isinstance(img, np.ndarray):
             error_ids.append(name)
     except:
@@ -59,7 +63,7 @@ print(len(error_ids))
 
 # 데이터가 있는 만큼만
 seoul = seoul.loc[~seoul.file_name.isin(error_ids)]
-print(len(seoul))
+print(len(seoul)) # 112,002
 
 # 숫자로 encoding
 encoding_dict = {}
@@ -158,21 +162,22 @@ num_ftrs = resnet18_pretrained.fc.in_features
 resnet18_pretrained.fc = nn.Sequential(
                             nn.Linear(num_ftrs, 1024),
                             nn.ReLU(),
-                            nn.Linear(1024, num_classes),
+                            nn.Linear(1024, 2048),
+                            nn.ReLU(),
+                            nn.Linear(2048, num_classes),
                          )
-device = torch.device('cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 resnet18_pretrained.to(device)
-summary(resnet18_pretrained, input_size=(3, 128, 128), device=device.type)
 
 # Loss Function
 criterion = nn.CrossEntropyLoss()
 # 모든 매개변수들이 최적화되었는지 관찰
-optimizer_ft = optim.SGD(resnet18_pretrained.parameters(), lr=0.001, momentum=0.9)
-# 7 에폭마다 0.1씩 학습률 감소
-exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=3, gamma=0.0002)
+optimizer_ft = optim.Adam(resnet18_pretrained.parameters(), lr=0.001)
+# step_size 에폭마다 gamma 씩 학습률 감소
+exp_lr_scheduler = lr_scheduler.LambdaLR(optimizer_ft, lr_lambda=lambda epoch: 0.95 ** epoch)
 
 # training func
-def train_model(model, criterion, optimizer, scheduler, num_epochs=12):
+def train_model(model, criterion, optimizer, scheduler, num_epochs=10):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -237,10 +242,16 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=12):
 #                        exp_lr_scheduler, num_epochs=25)
 
 # load pretrained model
-premodel = torch.load('./model_0814_4.pt')
+premodel = torch.load('./model_0816_2.pt')
 premodel.to(device)
 
 # fitting
 model_ft = train_model(premodel, criterion, optimizer_ft, 
-                       exp_lr_scheduler, num_epochs=25)
+                       exp_lr_scheduler, num_epochs=20)
 torch.save(model_ft, './model_0816.pt')
+
+
+# inference
+
+# 단어/문장에 적용 방안
+
