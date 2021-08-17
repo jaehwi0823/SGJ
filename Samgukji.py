@@ -225,7 +225,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=10):
         if epoch_acc > best_acc:
             best_acc = epoch_acc
             best_model_wts = copy.deepcopy(model.state_dict())
-            torch.save(model, f'./model_0816_{epoch}.pt')
+            torch.save(model, f'./model_0817_{epoch}.pt')
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
@@ -238,20 +238,63 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=10):
 
 
 # model fitting for the first time
-# model_ft = train_model(resnet18_pretrained, criterion, optimizer_ft, 
-#                        exp_lr_scheduler, num_epochs=25)
+model_ft = train_model(resnet18_pretrained, criterion, optimizer_ft, 
+                       exp_lr_scheduler, num_epochs=50)
 
 # load pretrained model
-premodel = torch.load('./model_0816_2.pt')
-premodel.to(device)
+# premodel = torch.load('./model_0816_2.pt')
+# premodel.to(device)
+# model_ft = train_model(premodel, criterion, optimizer_ft, 
+#                        exp_lr_scheduler, num_epochs=20)
 
-# fitting
-model_ft = train_model(premodel, criterion, optimizer_ft, 
-                       exp_lr_scheduler, num_epochs=20)
-torch.save(model_ft, './model_0816.pt')
+# save
+torch.save(model_ft, './model_0817.pt')
 
 
-# inference
 
-# 단어/문장에 적용 방안
+
+
+# inference ===============================================================
+model = model_ft
+model.eval()
+model.to('cpu')
+train_features, train_labels = next(iter(train_dataloader))
+
+def test_model(model, idx):
+    single_image = torch.reshape(train_features[idx], (-1,3,128,128))
+    rslt = model(single_image)
+    key = int(torch.argmax(rslt))
+    print("predicted label: ", {v:i for i,v in encoding_dict.items()}[key])
+    sample = single_image.squeeze()
+    sample = sample.permute(1,2,0)
+    plt.imshow(sample, cmap="gray")
+    plt.show()
+
+test_model(model, 6)
+
+
+
+# test ====================================================================
+def show_img(image_dir):
+    img = imread(image_dir)
+    plt.imshow(img)
+    plt.show()
+    return img
+
+test0 = show_img(os.path.join('raw/samgukji/test0.jpg'))
+croped = test0[490:520, 140:200] # 하후돈
+croped = test0[490:520, 140:160]
+plt.imshow(croped)
+plt.show()
+croped.shape
+
+croped = transforms.ToTensor()(croped) 
+croped = transforms.Resize((128, 128))(croped)
+plt.imshow(croped.permute(1,2,0))
+plt.show()
+
+pred_char = model(torch.reshape(croped, (-1,3,128,128)))
+key = int(torch.argmax(pred_char))
+print("predicted label: ", {v:i for i,v in encoding_dict.items()}[key])
+
 
